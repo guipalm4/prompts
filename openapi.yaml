@@ -1,0 +1,270 @@
+openapi: 3.1.0
+info:
+  title: Sistema de Convites API
+  version: 1.0.0
+  description: API para gerenciamento de códigos de convite que controlam o acesso de novos usuários à plataforma.
+
+servers:
+  - url: https://api.example.com/v1
+    description: Servidor de produção
+  - url: https://staging-api.example.com/v1
+    description: Servidor de staging
+
+paths:
+  /invites:
+    post:
+      operationId: createInvite
+      tags:
+        - Invites
+      summary: Criar novo código de convite
+      description: Cria um novo código de convite com limites de uso ou validade temporal. Pelo menos um critério de expiração (maxUses ou validityDays) deve ser fornecido.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInviteRequest'
+            example:
+              maxUses: 10
+              validityDays: 30
+      responses:
+        '201':
+          description: Código de convite criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteCode'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                code: "INV-ABC123XYZ"
+                createdBy: "123e4567-e89b-12d3-a456-426614174000"
+                createdAt: "2024-01-15T10:30:00Z"
+                maxUses: 10
+                remainingUses: 10
+                validityDays: 30
+                expiresAt: "2024-02-14T10:30:00Z"
+                status: "ACTIVE"
+        '400':
+          description: Requisição inválida - pelo menos um critério de expiração deve ser fornecido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "VALIDATION_ERROR"
+                message: "Pelo menos um critério de expiração deve ser fornecido (maxUses ou validityDays)"
+                details:
+                  field: "maxUses,validityDays"
+                  reason: "Ambos os campos não podem ser nulos simultaneamente"
+
+  /invites/{code}:
+    get:
+      operationId: validateInvite
+      tags:
+        - Invites
+      summary: Validar código de convite
+      description: Valida se um código de convite está ativo e pode ser utilizado. Retorna informações do convite se válido, ou erro específico se inválido/expirado.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: Código de convite alfanumérico (case-insensitive) a ser validado
+          schema:
+            type: string
+            pattern: '^[A-Z0-9-]+$'
+            example: "INV-ABC123XYZ"
+      responses:
+        '200':
+          description: Código de convite válido e disponível para uso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateInviteResponse'
+              example:
+                valid: true
+                code: "INV-ABC123XYZ"
+                remainingUses: 5
+                expiresAt: "2024-02-14T10:30:00Z"
+                status: "ACTIVE"
+        '400':
+          description: Código de convite inválido - formato incorreto ou já utilizado pelo usuário
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "INVALID_CODE"
+                message: "Código de convite inválido"
+                details:
+                  code: "INV-ABC123XYZ"
+                  reason: "Código não encontrado no sistema"
+        '404':
+          description: Código de convite não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "NOT_FOUND"
+                message: "Código de convite não encontrado"
+                details:
+                  code: "INV-ABC123XYZ"
+        '410':
+          description: Código de convite expirado (por uso ou por tempo)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "INVITE_EXPIRED"
+                message: "Código de convite expirado"
+                details:
+                  code: "INV-ABC123XYZ"
+                  reason: "Código atingiu limite de usos"
+                  expiredBy: "MAX_USES"
+
+components:
+  schemas:
+    InviteCode:
+      type: object
+      description: Código de convite gerado por administrador para controlar acesso de novos usuários
+      required:
+        - id
+        - code
+        - createdBy
+        - createdAt
+        - remainingUses
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único do convite
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        code:
+          type: string
+          description: Código alfanumérico único do convite (case-insensitive)
+          example: "INV-ABC123XYZ"
+        createdBy:
+          type: string
+          format: uuid
+          description: Identificador do usuário administrador que criou o convite
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        createdAt:
+          type: string
+          format: date-time
+          description: Data e hora de criação do convite
+          example: "2024-01-15T10:30:00Z"
+        maxUses:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Limite máximo de usos do convite. Null indica sem limite de usos
+          example: 10
+        remainingUses:
+          type: integer
+          minimum: 0
+          description: Quantidade de usos restantes do convite. Decrementa a cada uso
+          example: 5
+        validityDays:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Validade do convite em dias a partir da criação. Null indica sem validade temporal
+          example: 30
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Data e hora de expiração calculada (createdAt + validityDays). Null se validityDays for null
+          example: "2024-02-14T10:30:00Z"
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - EXPIRED
+          description: Status atual do convite. ACTIVE indica disponível para uso, EXPIRED indica expirado
+          example: "ACTIVE"
+
+    CreateInviteRequest:
+      type: object
+      description: Dados para criação de um novo código de convite
+      required: []
+      properties:
+        code:
+          type: string
+          nullable: true
+          description: Código alfanumérico customizado. Se não fornecido, será gerado automaticamente pelo backend (case-insensitive)
+          example: "INV-MYCODE123"
+        maxUses:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Limite máximo de usos do convite. Null indica sem limite de usos. Pelo menos um entre maxUses ou validityDays deve ser fornecido
+          example: 10
+        validityDays:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Validade do convite em dias a partir da criação. Null indica sem validade temporal. Pelo menos um entre maxUses ou validityDays deve ser fornecido
+          example: 30
+
+    ValidateInviteResponse:
+      type: object
+      description: Resposta de validação de código de convite
+      required:
+        - valid
+        - code
+        - status
+      properties:
+        valid:
+          type: boolean
+          description: Indica se o código de convite é válido e pode ser utilizado
+          example: true
+        code:
+          type: string
+          description: Código de convite validado
+          example: "INV-ABC123XYZ"
+        remainingUses:
+          type: integer
+          nullable: true
+          minimum: 0
+          description: Quantidade de usos restantes. Null se não houver limite de usos
+          example: 5
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Data e hora de expiração. Null se não houver validade temporal
+          example: "2024-02-14T10:30:00Z"
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - EXPIRED
+          description: Status atual do convite
+          example: "ACTIVE"
+
+    Error:
+      type: object
+      description: Estrutura padrão de resposta de erro
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Código do tipo de erro
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: Mensagem de erro descritiva para o usuário
+          example: "Pelo menos um critério de expiração deve ser fornecido"
+        details:
+          type: object
+          nullable: true
+          description: Detalhes adicionais do erro (estrutura varia conforme o tipo de erro)
+          additionalProperties: true
+          example:
+            field: "maxUses,validityDays"
+            reason: "Ambos os campos não podem ser nulos simultaneamente"
