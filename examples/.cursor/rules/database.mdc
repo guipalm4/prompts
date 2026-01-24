@@ -1,0 +1,281 @@
+---
+description: Convenções para banco de dados e Prisma
+globs: ["src/db/**", "src/models/**", "prisma/**"]
+---
+
+# Convenções de Banco de Dados
+
+## Prisma Schema
+
+### Naming
+- **Modelos:** PascalCase singular (`User`, `Sample`, `LabResult`)
+- **Campos:** camelCase (`createdAt`, `userId`)
+- **Tabelas:** snake_case plural (gerado automaticamente: `users`, `samples`)
+- **Enums:** PascalCase com valores UPPER_SNAKE_CASE
+
+### Campos Padrão (toda tabela DEVE ter)
+```prisma
+model Example {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime? // Soft delete
+  
+  // ... outros campos
+}
+```
+
+### Exemplo Completo
+```prisma
+// prisma/schema.prisma
+
+enum UserRole {
+  ADMIN
+  DOCTOR
+  TECHNICIAN
+  RECEPTIONIST
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  PENDING_VERIFICATION
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  password  String     // Argon2id hash
+  name      String
+  cpf       String?    @unique // PII - criptografado em repouso
+  role      UserRole   @default(RECEPTIONIST)
+  status    UserStatus @default(PENDING_VERIFICATION)
+  
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+  
+  // Relacionamentos
+  samples   Sample[]
+  auditLogs AuditLog[]
+  
+  @@index([email])
+  @@index([status])
+  @@map("users")
+}
+
+model Sample {
+  id           String       @id @default(uuid())
+  code         String       @unique // Código de barras
+  patientId    String
+  collectedAt  DateTime
+  collectedBy  String       // userId
+  status       SampleStatus @default(COLLECTED)
+  
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+  
+  // Relacionamentos
+  patient      Patient      @relation(fields: [patientId], references: [id])
+  collector    User         @relation(fields: [collectedBy], references: [id])
+  results      LabResult[]
+  
+  @@index([patientId])
+  @@index([code])
+  @@index([status])
+  @@map("samples")
+}
+```
+
+## Migrations
+
+### Comandos
+```bash
+# Criar migration
+npx prisma migrate dev --name add_user_status
+
+# Aplicar em produção
+npx prisma migrate deploy
+
+# Reset (APENAS em desenvolvimento)
+npx prisma migrate reset
+```
+
+### Regras de Migrations
+- DEVE criar migration para toda alteração de schema
+- DEVE nomear de forma descritiva: `add_user_status`, `create_samples_table`
+- NÃO DEVE editar migrations já aplicadas em produção
+- DEVE testar migration em staging antes de produção
+
+### Migrations Destrutivas (REQUER APROVAÇÃO)
+- DROP TABLE
+- DROP COLUMN
+- ALTER COLUMN (reduzir tamanho)
+- Remoção de índice único
+
+```sql
+-- EXEMPLO: Migration destrutiva DEVE ter comentário
+-- ⚠️ BREAKING CHANGE: Requer aprovação de Tech Lead
+-- Motivo: [explicação]
+-- Rollback: [comando de rollback]
+
+ALTER TABLE users DROP COLUMN legacy_field;
+```
+
+## Queries
+
+### DEVE usar Prisma Client
+```typescript
+// ✅ Correto
+const user = await prisma.user.findUnique({
+  where: { id },
+  select: {
+    id: true,
+    email: true,
+    name: true,
+    // NÃO selecionar password
+  },
+});
+
+// ✅ Com relacionamentos
+const sample = await prisma.sample.findUnique({
+  where: { id },
+  include: {
+    patient: {
+      select: { id: true, name: true },
+    },
+    results: true,
+  },
+});
+```
+
+### NÃO DEVE usar raw queries (exceto casos específicos)
+```typescript
+// ❌ Evitar
+const users = await prisma.$queryRaw`SELECT * FROM users WHERE id = ${id}`;
+
+// ✅ Se necessário (ex: queries complexas), usar tagged template
+const result = await prisma.$queryRaw`
+  SELECT 
+    s.id,
+    COUNT(r.id) as result_count
+  FROM samples s
+  LEFT JOIN lab_results r ON r.sample_id = s.id
+  WHERE s.deleted_at IS NULL
+  GROUP BY s.id
+  HAVING COUNT(r.id) > ${minResults}
+`;
+```
+
+## Soft Delete
+
+### Implementação
+```typescript
+// src/lib/prisma-extensions.ts
+import { Prisma } from '@prisma/client';
+
+export const softDeleteExtension = Prisma.defineExtension({
+  name: 'softDelete',
+  query: {
+    $allModels: {
+      async delete({ model, args, query }) {
+        return prisma[model].update({
+          ...args,
+          data: { deletedAt: new Date() },
+        });
+      },
+      async findMany({ model, args, query }) {
+        args.where = { ...args.where, deletedAt: null };
+        return query(args);
+      },
+      async findFirst({ model, args, query }) {
+        args.where = { ...args.where, deletedAt: null };
+        return query(args);
+      },
+    },
+  },
+});
+```
+
+### Uso
+```typescript
+// Soft delete automático
+await prisma.user.delete({ where: { id } });
+
+// Query exclui deletados automaticamente
+const users = await prisma.user.findMany(); // Só ativos
+
+// Incluir deletados (quando necessário)
+const allUsers = await prisma.user.findMany({
+  where: { deletedAt: { not: null } }, // Override
+});
+```
+
+## Transações
+
+### Quando usar
+- Operações que afetam múltiplas tabelas
+- Operações que precisam ser atômicas
+
+```typescript
+// ✅ Transação para operação atômica
+const result = await prisma.$transaction(async (tx) => {
+  const sample = await tx.sample.create({
+    data: { ... },
+  });
+  
+  await tx.auditLog.create({
+    data: {
+      action: 'SAMPLE_CREATED',
+      entityId: sample.id,
+      userId: req.user.id,
+    },
+  });
+  
+  return sample;
+});
+```
+
+## Índices
+
+### Regras
+- DEVE criar índice para campos usados em WHERE frequentemente
+- DEVE criar índice para foreign keys
+- DEVE criar índice composto para queries com múltiplos filtros
+- NÃO DEVE criar índices desnecessários (overhead de escrita)
+
+```prisma
+model Sample {
+  // ...
+  
+  @@index([patientId])           // FK
+  @@index([status])              // Filtro comum
+  @@index([collectedAt])         // Ordenação
+  @@index([status, collectedAt]) // Query composta
+}
+```
+
+## Audit Log
+
+### Tabela obrigatória para dados sensíveis
+```prisma
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String   // CREATE, UPDATE, DELETE, VIEW
+  entity    String   // User, Sample, LabResult
+  entityId  String
+  userId    String
+  changes   Json?    // { before: {...}, after: {...} }
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id])
+  
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+```

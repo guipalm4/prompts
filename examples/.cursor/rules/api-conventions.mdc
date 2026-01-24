@@ -1,0 +1,206 @@
+---
+description: Convenções para desenvolvimento de APIs REST
+globs: ["src/api/**", "src/routes/**", "src/controllers/**"]
+---
+
+# Convenções de API
+
+## Estrutura de Rotas
+
+### Naming
+- DEVE usar kebab-case para paths: `/api/v1/lab-results`
+- DEVE usar plural para coleções: `/users`, `/samples`
+- DEVE usar substantivos, não verbos: `/users` (não `/getUsers`)
+
+### Versionamento
+- DEVE prefixar com versão: `/api/v1/...`
+- Versão DEVE ser incrementada em breaking changes
+
+### Hierarquia de recursos
+```
+/api/v1/patients                    # Coleção
+/api/v1/patients/:id                # Recurso único
+/api/v1/patients/:id/samples        # Sub-recurso
+/api/v1/patients/:id/samples/:sampleId/results  # Aninhamento máximo: 3 níveis
+```
+
+## Métodos HTTP
+
+| Método | Uso | Resposta sucesso | Idempotente |
+|--------|-----|------------------|-------------|
+| GET | Leitura | 200 OK | Sim |
+| POST | Criação | 201 Created | Não |
+| PUT | Substituição completa | 200 OK | Sim |
+| PATCH | Atualização parcial | 200 OK | Não |
+| DELETE | Remoção | 204 No Content | Sim |
+
+## Formato de Request
+
+### Headers obrigatórios
+```http
+Content-Type: application/json
+Authorization: Bearer <jwt>
+X-Request-ID: <uuid>  # Gerado pelo cliente ou gateway
+```
+
+### Body (POST/PUT/PATCH)
+```json
+{
+  "email": "usuario@exemplo.com",
+  "name": "João Silva"
+}
+```
+
+## Formato de Response
+
+### Sucesso (recurso único)
+```json
+{
+  "data": {
+    "id": "uuid",
+    "email": "usuario@exemplo.com",
+    "name": "João Silva",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### Sucesso (coleção com paginação)
+```json
+{
+  "data": [
+    { "id": "uuid", "name": "Item 1" },
+    { "id": "uuid", "name": "Item 2" }
+  ],
+  "pagination": {
+    "page": 1,
+    "perPage": 20,
+    "total": 100,
+    "totalPages": 5
+  }
+}
+```
+
+### Erro (padrão global)
+```json
+{
+  "code": "USER.EMAIL_TAKEN",
+  "message": "Este email já está em uso",
+  "severity": "WARNING",
+  "details": [
+    { "field": "email", "code": "UNIQUE_VIOLATION", "message": "Email já cadastrado" }
+  ],
+  "traceId": "uuid"
+}
+```
+
+## Validação de Input
+
+### Schema Zod obrigatório
+```typescript
+// src/api/users/schemas.ts
+import { z } from 'zod';
+
+export const createUserSchema = z.object({
+  email: z.string().email().max(255).transform(s => s.trim().toLowerCase()),
+  name: z.string().min(2).max(100).transform(s => s.trim()),
+  password: z.string().min(8).max(72), // 72 = limite Argon2
+});
+
+export type CreateUserInput = z.infer<typeof createUserSchema>;
+```
+
+### Uso no handler
+```typescript
+// src/api/users/handlers.ts
+import { createUserSchema } from './schemas';
+
+export async function createUser(req: FastifyRequest, reply: FastifyReply) {
+  const result = createUserSchema.safeParse(req.body);
+  
+  if (!result.success) {
+    return reply.status(400).send({
+      code: 'VALIDATION.INVALID_INPUT',
+      message: 'Dados inválidos',
+      severity: 'WARNING',
+      details: result.error.issues.map(i => ({
+        field: i.path.join('.'),
+        code: i.code,
+        message: i.message,
+      })),
+      traceId: req.id,
+    });
+  }
+  
+  // Processar com result.data (já validado e normalizado)
+}
+```
+
+## Autenticação e Autorização
+
+### Middleware de auth
+```typescript
+// Rota protegida
+app.get('/api/v1/users/me', {
+  preHandler: [requireAuth],
+}, getMeHandler);
+
+// Rota com role específico
+app.delete('/api/v1/users/:id', {
+  preHandler: [requireAuth, requireRole(['admin'])],
+}, deleteUserHandler);
+```
+
+### Acesso ao usuário autenticado
+```typescript
+// req.user é populado pelo middleware requireAuth
+const userId = req.user.id;
+const userRoles = req.user.roles;
+```
+
+## Status Codes
+
+| Código | Quando usar |
+|--------|-------------|
+| 200 | Sucesso em GET, PUT, PATCH |
+| 201 | Recurso criado (POST) |
+| 204 | Sucesso sem body (DELETE) |
+| 400 | Erro de validação |
+| 401 | Não autenticado |
+| 403 | Não autorizado (sem permissão) |
+| 404 | Recurso não encontrado |
+| 409 | Conflito (ex: email duplicado) |
+| 422 | Erro de regra de negócio |
+| 429 | Rate limit excedido |
+| 500 | Erro interno (nunca expor detalhes) |
+
+## Exemplo Completo de Endpoint
+
+```typescript
+// src/api/users/routes.ts
+import { FastifyPluginAsync } from 'fastify';
+import { createUserSchema, CreateUserInput } from './schemas';
+import { UserService } from '@/services/user-service';
+import { requireAuth, requireRole } from '@/middleware/auth';
+
+const usersRoutes: FastifyPluginAsync = async (app) => {
+  // POST /api/v1/users
+  app.post<{ Body: CreateUserInput }>('/users', {
+    schema: {
+      body: createUserSchema,
+      response: {
+        201: { $ref: 'UserResponse' },
+        400: { $ref: 'ErrorResponse' },
+        409: { $ref: 'ErrorResponse' },
+      },
+    },
+    preHandler: [requireAuth, requireRole(['admin'])],
+  }, async (req, reply) => {
+    const user = await UserService.create(req.body);
+    return reply.status(201).send({ data: user });
+  });
+};
+
+export default usersRoutes;
+```

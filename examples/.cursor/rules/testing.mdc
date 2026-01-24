@@ -1,0 +1,317 @@
+---
+description: Convenções para testes automatizados
+globs: ["**/*.test.ts", "**/*.spec.ts", "src/tests/**", "tests/**"]
+---
+
+# Convenções de Testes
+
+## Framework e Ferramentas
+- **Test Runner:** Vitest 1.x
+- **HTTP Testing:** Supertest
+- **Mocking:** Vitest mocks (vi.mock, vi.fn)
+- **Database:** Prisma com banco de teste isolado
+
+## Estrutura de Arquivos
+
+```
+src/
+├── api/
+│   └── users/
+│       ├── handlers.ts
+│       ├── schemas.ts
+│       └── handlers.test.ts    # Testes unitários
+tests/
+├── integration/
+│   └── users.test.ts           # Testes de integração
+├── e2e/
+│   └── auth-flow.test.ts       # Testes end-to-end
+├── fixtures/
+│   └── users.ts                # Dados de teste
+└── setup.ts                    # Setup global
+```
+
+## Naming
+
+### Arquivos
+- Unitários: `[nome].test.ts` junto ao arquivo
+- Integração: `tests/integration/[feature].test.ts`
+- E2E: `tests/e2e/[fluxo].test.ts`
+
+### Testes
+```typescript
+describe('UserService', () => {
+  describe('create', () => {
+    it('should create user with valid data', async () => {});
+    it('should throw USER.EMAIL_TAKEN when email exists', async () => {});
+    it('should hash password with Argon2id', async () => {});
+  });
+});
+```
+
+## Estrutura de Teste (AAA)
+
+```typescript
+it('should return user by id', async () => {
+  // Arrange (Given)
+  const user = await createTestUser({ email: 'test@example.com' });
+  
+  // Act (When)
+  const result = await UserService.getById(user.id);
+  
+  // Assert (Then)
+  expect(result).toBeDefined();
+  expect(result.email).toBe('test@example.com');
+});
+```
+
+## Fixtures e Factories
+
+### Factory Pattern
+```typescript
+// tests/fixtures/users.ts
+import { prisma } from '@/lib/prisma';
+import { hashPassword } from '@/lib/auth';
+
+interface CreateTestUserOptions {
+  email?: string;
+  password?: string;
+  role?: UserRole;
+}
+
+export async function createTestUser(options: CreateTestUserOptions = {}) {
+  const {
+    email = `test-${Date.now()}@example.com`,
+    password = 'TestPassword123!',
+    role = 'RECEPTIONIST',
+  } = options;
+  
+  return prisma.user.create({
+    data: {
+      email,
+      password: await hashPassword(password),
+      name: 'Test User',
+      role,
+      status: 'ACTIVE',
+    },
+  });
+}
+
+export async function createTestSample(patientId: string, collectorId: string) {
+  return prisma.sample.create({
+    data: {
+      code: `SAMPLE-${Date.now()}`,
+      patientId,
+      collectedBy: collectorId,
+      collectedAt: new Date(),
+      status: 'COLLECTED',
+    },
+  });
+}
+```
+
+## Testes de API (Integração)
+
+```typescript
+// tests/integration/users.test.ts
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createTestApp } from '../setup';
+import { createTestUser } from '../fixtures/users';
+import { prisma } from '@/lib/prisma';
+
+describe('POST /api/v1/users', () => {
+  let app: FastifyInstance;
+  let adminToken: string;
+  
+  beforeAll(async () => {
+    app = await createTestApp();
+    const admin = await createTestUser({ role: 'ADMIN' });
+    adminToken = await generateTestToken(admin);
+  });
+  
+  afterAll(async () => {
+    await app.close();
+  });
+  
+  beforeEach(async () => {
+    // Limpar dados entre testes
+    await prisma.user.deleteMany({
+      where: { email: { contains: 'test-' } },
+    });
+  });
+  
+  // TEST-001: Criação de usuário com dados válidos
+  it('should create user with valid data (201)', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/users',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        email: 'newuser@example.com',
+        name: 'New User',
+        password: 'SecurePassword123!',
+      },
+    });
+    
+    expect(response.statusCode).toBe(201);
+    const body = JSON.parse(response.body);
+    expect(body.data.email).toBe('newuser@example.com');
+    expect(body.data).not.toHaveProperty('password');
+  });
+  
+  // TEST-002: Erro de email duplicado
+  it('should return USER.EMAIL_TAKEN when email exists (409)', async () => {
+    await createTestUser({ email: 'existing@example.com' });
+    
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/users',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        email: 'existing@example.com',
+        name: 'Another User',
+        password: 'SecurePassword123!',
+      },
+    });
+    
+    expect(response.statusCode).toBe(409);
+    const body = JSON.parse(response.body);
+    expect(body.code).toBe('USER.EMAIL_TAKEN');
+    expect(body.severity).toBe('WARNING');
+  });
+  
+  // TEST-003: Validação de email inválido
+  it('should return VALIDATION.INVALID_INPUT for invalid email (400)', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/users',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        email: 'invalid-email',
+        name: 'User',
+        password: 'SecurePassword123!',
+      },
+    });
+    
+    expect(response.statusCode).toBe(400);
+    const body = JSON.parse(response.body);
+    expect(body.code).toBe('VALIDATION.INVALID_INPUT');
+    expect(body.details).toContainEqual(
+      expect.objectContaining({ field: 'email' })
+    );
+  });
+  
+  // TEST-004: Acesso não autorizado
+  it('should return 401 without token', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/users',
+      payload: {
+        email: 'user@example.com',
+        name: 'User',
+        password: 'SecurePassword123!',
+      },
+    });
+    
+    expect(response.statusCode).toBe(401);
+  });
+  
+  // TEST-005: Permissão negada para não-admin
+  it('should return 403 for non-admin users', async () => {
+    const regularUser = await createTestUser({ role: 'RECEPTIONIST' });
+    const userToken = await generateTestToken(regularUser);
+    
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/users',
+      headers: { authorization: `Bearer ${userToken}` },
+      payload: {
+        email: 'newuser@example.com',
+        name: 'User',
+        password: 'SecurePassword123!',
+      },
+    });
+    
+    expect(response.statusCode).toBe(403);
+  });
+});
+```
+
+## Cobertura Mínima
+
+| Tipo | Cobertura | Onde aplicar |
+|------|-----------|--------------|
+| Unitário | 80% | Services, Utils |
+| Integração | 100% dos endpoints | API routes |
+| E2E | Fluxos críticos | Auth, Operações principais |
+
+### Por FEAT
+- DEVE ter pelo menos **1 teste por cenário Gherkin** no PRD
+- DEVE cobrir **todos os códigos de erro** documentados
+
+## Mocks
+
+### O que mockar
+- Serviços externos (APIs terceiras)
+- Email/SMS
+- Filas de mensagens
+
+### O que NÃO mockar
+- Banco de dados (usar banco de teste)
+- Lógica de negócio interna
+
+```typescript
+// ✅ Mock de serviço externo
+vi.mock('@/lib/email', () => ({
+  sendEmail: vi.fn().mockResolvedValue({ success: true }),
+}));
+
+// ❌ NÃO mockar Prisma em testes de integração
+// Use banco de teste real
+```
+
+## Setup Global
+
+```typescript
+// tests/setup.ts
+import { beforeAll, afterAll } from 'vitest';
+import { prisma } from '@/lib/prisma';
+
+beforeAll(async () => {
+  // Conectar ao banco de teste
+  await prisma.$connect();
+});
+
+afterAll(async () => {
+  // Limpar e desconectar
+  await prisma.$disconnect();
+});
+
+// Helper para criar app de teste
+export async function createTestApp() {
+  const app = await buildApp({ 
+    logger: false,
+    trustProxy: true,
+  });
+  await app.ready();
+  return app;
+}
+```
+
+## Comandos
+
+```bash
+# Rodar todos os testes
+npm test
+
+# Rodar com coverage
+npm run test:coverage
+
+# Rodar testes específicos
+npm test -- users
+
+# Rodar em watch mode
+npm run test:watch
+
+# Rodar apenas integração
+npm test -- tests/integration
+```

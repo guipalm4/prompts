@@ -1,0 +1,343 @@
+---
+description: Convenções para desenvolvimento frontend com Next.js
+globs: ["src/app/**", "src/components/**", "src/pages/**", "src/hooks/**"]
+---
+
+# Convenções de Frontend
+
+## Stack
+- **Framework:** Next.js 14+ (App Router)
+- **Linguagem:** TypeScript 5.3+ (strict mode)
+- **Styling:** Tailwind CSS 3.x
+- **Componentes:** shadcn/ui
+- **State:** Zustand 4.x
+- **Forms:** React Hook Form + Zod
+- **Data Fetching:** TanStack Query (React Query) 5.x
+
+## Estrutura de Diretórios
+
+```
+src/
+├── app/                    # App Router (páginas e layouts)
+│   ├── (auth)/            # Grupo de rotas públicas
+│   │   ├── login/
+│   │   └── register/
+│   ├── (dashboard)/       # Grupo de rotas protegidas
+│   │   ├── layout.tsx
+│   │   ├── page.tsx
+│   │   └── patients/
+│   ├── api/               # API Routes (BFF)
+│   ├── layout.tsx
+│   └── globals.css
+├── components/
+│   ├── ui/                # shadcn/ui components
+│   ├── forms/             # Formulários reutilizáveis
+│   ├── layouts/           # Layouts compartilhados
+│   └── [feature]/         # Componentes por feature
+├── hooks/                 # Custom hooks
+├── lib/                   # Utilitários
+├── stores/                # Zustand stores
+└── types/                 # TypeScript types
+```
+
+## Componentes
+
+### Naming
+- **Componentes:** PascalCase (`UserCard.tsx`)
+- **Hooks:** camelCase com prefixo `use` (`useAuth.ts`)
+- **Stores:** camelCase com sufixo `Store` (`userStore.ts`)
+- **Utils:** camelCase (`formatDate.ts`)
+
+### Estrutura de Componente
+```tsx
+// src/components/users/UserCard.tsx
+'use client'; // Apenas se necessário (interatividade)
+
+import { type FC } from 'react';
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Avatar } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
+
+// Props com interface
+interface UserCardProps {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string;
+  };
+  className?: string;
+  onSelect?: (userId: string) => void;
+}
+
+// Componente funcional com FC
+export const UserCard: FC<UserCardProps> = ({ user, className, onSelect }) => {
+  return (
+    <Card 
+      className={cn('cursor-pointer hover:shadow-md', className)}
+      onClick={() => onSelect?.(user.id)}
+    >
+      <CardHeader className="flex flex-row items-center gap-4">
+        <Avatar src={user.avatarUrl} alt={user.name} />
+        <div>
+          <h3 className="font-semibold">{user.name}</h3>
+          <p className="text-sm text-muted-foreground">{user.email}</p>
+        </div>
+      </CardHeader>
+    </Card>
+  );
+};
+```
+
+## Server vs Client Components
+
+### Server Components (padrão)
+- Sem 'use client'
+- Para: páginas, layouts, data fetching
+- NÃO podem: usar hooks, eventos, state
+
+```tsx
+// src/app/users/page.tsx (Server Component)
+import { UserList } from '@/components/users/UserList';
+import { getUsers } from '@/lib/api/users';
+
+export default async function UsersPage() {
+  const users = await getUsers(); // Fetch no servidor
+  
+  return (
+    <main className="container py-8">
+      <h1 className="text-2xl font-bold mb-6">Usuários</h1>
+      <UserList users={users} />
+    </main>
+  );
+}
+```
+
+### Client Components
+- Com 'use client' no topo
+- Para: interatividade, hooks, eventos
+
+```tsx
+// src/components/users/UserSearch.tsx
+'use client';
+
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { useDebounce } from '@/hooks/useDebounce';
+
+export function UserSearch({ onSearch }: { onSearch: (query: string) => void }) {
+  const [query, setQuery] = useState('');
+  const debouncedQuery = useDebounce(query, 300);
+  
+  useEffect(() => {
+    onSearch(debouncedQuery);
+  }, [debouncedQuery, onSearch]);
+  
+  return (
+    <Input
+      placeholder="Buscar usuários..."
+      value={query}
+      onChange={(e) => setQuery(e.target.value)}
+    />
+  );
+}
+```
+
+## Data Fetching
+
+### Com TanStack Query
+```tsx
+// src/hooks/useUsers.ts
+'use client';
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+
+export function useUsers(filters?: UserFilters) {
+  return useQuery({
+    queryKey: ['users', filters],
+    queryFn: () => api.users.list(filters),
+    staleTime: 5 * 60 * 1000, // 5 minutos
+  });
+}
+
+export function useCreateUser() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: api.users.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+}
+```
+
+## Formulários
+
+### Com React Hook Form + Zod
+```tsx
+// src/components/forms/LoginForm.tsx
+'use client';
+
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Form, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+
+const loginSchema = z.object({
+  email: z.string().email('Email inválido'),
+  password: z.string().min(8, 'Mínimo 8 caracteres'),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
+
+export function LoginForm({ onSubmit }: { onSubmit: (data: LoginFormData) => void }) {
+  const form = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
+  
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <Input type="email" {...field} />
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Senha</FormLabel>
+              <Input type="password" {...field} />
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <Button type="submit" className="w-full">
+          Entrar
+        </Button>
+      </form>
+    </Form>
+  );
+}
+```
+
+## State Management (Zustand)
+
+```typescript
+// src/stores/authStore.ts
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+}
+
+interface AuthState {
+  user: User | null;
+  isAuthenticated: boolean;
+  setUser: (user: User | null) => void;
+  logout: () => void;
+}
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      isAuthenticated: false,
+      setUser: (user) => set({ user, isAuthenticated: !!user }),
+      logout: () => set({ user: null, isAuthenticated: false }),
+    }),
+    {
+      name: 'auth-storage',
+      partialize: (state) => ({ user: state.user }), // Não persistir isAuthenticated
+    }
+  )
+);
+```
+
+## Tratamento de Erros
+
+### Error Boundary
+```tsx
+// src/app/error.tsx
+'use client';
+
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen">
+      <h2 className="text-2xl font-bold mb-4">Algo deu errado!</h2>
+      <Button onClick={reset}>Tentar novamente</Button>
+    </div>
+  );
+}
+```
+
+### Toast para erros de API
+```tsx
+// Em mutations/queries
+useMutation({
+  mutationFn: api.users.create,
+  onError: (error) => {
+    toast.error(error.message || 'Erro ao criar usuário');
+  },
+});
+```
+
+## Acessibilidade (DEVE seguir)
+
+- DEVE usar elementos semânticos (`<main>`, `<nav>`, `<article>`)
+- DEVE incluir `aria-label` em botões com apenas ícone
+- DEVE manter ordem de foco lógica
+- DEVE ter contraste mínimo 4.5:1
+- DEVE funcionar com teclado
+
+```tsx
+// ✅ Correto
+<Button aria-label="Fechar modal">
+  <X className="h-4 w-4" />
+</Button>
+
+// ❌ Incorreto
+<Button>
+  <X className="h-4 w-4" />
+</Button>
+```
+
+## Performance
+
+- DEVE usar `next/image` para imagens
+- DEVE lazy load componentes pesados com `dynamic`
+- DEVE usar `Suspense` para loading states
+- NÃO DEVE importar bibliotecas inteiras
+
+```tsx
+// ✅ Import específico
+import { format } from 'date-fns/format';
+
+// ❌ Import completo
+import { format } from 'date-fns';
+```
