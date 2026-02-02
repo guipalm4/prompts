@@ -1,7 +1,7 @@
-# IDEA-v3 — Templates de Artefatos
+# AGENT-DOC — Templates de Artefatos
 
 > **Quando usar:** FASE 4 para gerar os artefatos finais.
-> **Carregue com:** `@IDEA-v3-TEMPLATES.MD`
+> **Carregue com:** `@AGENT-DOC-TEMPLATES.MD`
 
 ---
 
@@ -359,4 +359,235 @@ Mínimo 3 ADRs com:
 
 **Riscos:**
 - ...
+```
+
+---
+
+## Template: `TESTING_STRATEGY.md` (se perfil ≥ INTERNO)
+
+```markdown
+# Testing Strategy — [Nome do Projeto]
+
+> **Resumo executivo (max 150 tokens):** [Resumo da estratégia de testes]
+
+## 1. Cobertura por Feature
+
+| FEAT | Testes Unit | Testes Integration | Testes E2E | Cobertura Alvo |
+|------|-------------|---------------------|------------|----------------|
+| FEAT-001 | TEST-010, TEST-011 | TEST-001, TEST-002 | TEST-100 | 80% |
+| FEAT-002 | TEST-020 | TEST-003, TEST-004 | - | 60% |
+
+## 2. Configuração de CI
+
+### Pipeline de Testes
+
+```mermaid
+flowchart LR
+    A[Push] --> B[Lint]
+    B --> C[Unit Tests]
+    C --> D[Integration Tests]
+    D --> E{Cobertura >= Min?}
+    E -->|Não| F[Falha]
+    E -->|Sim| G[E2E Tests]
+    G --> H{Passou?}
+    H -->|Não| F
+    H -->|Sim| I[Sucesso]
+```
+
+### Configuração
+
+| Ambiente | Comando | Cobertura Mínima | Timeout |
+|----------|---------|-------------------|---------|
+| CI | `npm test -- --coverage` | 60% (INTERNO) / 80% (PRODUCAO) | 10min |
+| Pre-commit | `npm test -- --run` | - | 2min |
+| Smoke | `npm run test:smoke` | - | 1min |
+
+## 3. Smoke Tests
+
+Testes críticos executados antes de cada deploy:
+
+| TEST | Descrição | Criticidade |
+|------|-----------|-------------|
+| TEST-001 | Criar projeto válido | P0 |
+| TEST-100 | Fluxo completo de login | P0 |
+| TEST-002 | Erro ao criar projeto duplicado | P1 |
+
+**Script:** `./scripts/smoke-test.sh`
+
+## 4. Fixtures e Mocks
+
+### Fixtures Padronizadas
+
+```typescript
+// tests/fixtures/users.ts
+export const adminUser = {
+  id: 'admin-uuid',
+  email: 'admin@test.com',
+  role: 'admin',
+};
+
+export const regularUser = {
+  id: 'user-uuid',
+  email: 'user@test.com',
+  role: 'user',
+};
+```
+
+### Mocks Padronizados
+
+```typescript
+// tests/mocks/prisma.ts
+export const mockPrisma = {
+  project: {
+    create: vi.fn(),
+    findUnique: vi.fn(),
+  },
+};
+```
+
+## 5. Estratégia de Regressão
+
+### Antes de Nova Feature
+
+1. ✅ Rodar suite completa
+2. ✅ Todos devem passar (baseline)
+3. ✅ Registrar tempo de execução
+
+### Após Implementar Feature
+
+1. ✅ Rodar suite completa novamente
+2. ✅ Comparar com baseline
+3. ✅ Se algum teste falhou → **BUG DE REGRESSÃO**
+
+### CI/CD
+
+- Pipeline DEVE bloquear merge se testes falharem
+- Smoke tests executados em cada PR
+- Suite completa antes de merge em main
+
+## 6. Ferramentas
+
+| Ferramenta | Versão | Uso |
+|------------|--------|-----|
+| Vitest | 1.x | Framework de testes |
+| @vitest/coverage-v8 | 1.x | Cobertura de código |
+| Playwright | 1.x | Testes E2E |
+| MSW | 2.x | Mock de APIs |
+
+## 7. Comandos Úteis
+
+```bash
+# Rodar todos os testes
+npm test
+
+# Rodar com cobertura
+npm test -- --coverage
+
+# Rodar apenas unitários
+npm test -- --grep "unit"
+
+# Rodar apenas integration
+npm test -- --grep "integration"
+
+# Rodar smoke tests
+npm run test:smoke
+
+# Rodar em modo watch
+npm test -- --watch
+```
+```
+
+---
+
+## Template: `.cursor/rules/learnings.md`
+
+```markdown
+---
+description: Lições aprendidas e erros a evitar
+alwaysApply: true
+---
+
+# Learnings — [Nome do Projeto]
+
+## Erros Conhecidos
+
+| Data | Erro | Solução | Contexto | FEAT/API |
+|------|------|---------|----------|----------|
+| YYYY-MM-DD | [Descrição do erro] | [Solução encontrada] | [Contexto onde ocorreu] | FEAT-xxx / API-xxx |
+
+**Exemplo:**
+| Data | Erro | Solução | Contexto | FEAT/API |
+|------|------|---------|----------|----------|
+| 2024-01-15 | Prisma N+1 query | Usar `include` ao invés de queries separadas | API-001 | FEAT-001 |
+
+## Padrões que Funcionam
+
+### Padrão: [Nome do Padrão]
+
+**Quando usar:** [Contexto específico]
+
+**Como:** [Descrição de como implementar]
+
+**Exemplo:**
+\`\`\`typescript
+// Código de exemplo
+\`\`\`
+
+**Funciona bem para:** [Casos de uso]
+
+---
+
+### Padrão: [Outro Padrão]
+
+[Repetir estrutura acima]
+
+## Libs Consultadas (Cache)
+
+| Lib | Versão | Doc URL | Última Consulta | Notas |
+|-----|--------|---------|-----------------|-------|
+| [Nome] | [Versão] | [URL] | YYYY-MM-DD | [Notas relevantes] |
+
+**Exemplo:**
+| Lib | Versão | Doc URL | Última Consulta | Notas |
+|-----|--------|---------|-----------------|-------|
+| Fastify | 4.x | https://fastify.dev | 2024-01-15 | API estável, compatível Node 20+ |
+
+## Consultas de API Externa
+
+| API | Endpoint | Método | Última Consulta | Resposta Esperada |
+|-----|----------|--------|-----------------|-------------------|
+| [Nome] | [Path] | GET/POST/etc | YYYY-MM-DD | [Status + formato] |
+
+## Decisões de Design
+
+| Data | Decisão | Justificativa | ADR |
+|------|---------|---------------|-----|
+| YYYY-MM-DD | [Decisão] | [Por que] | ADR-xxx |
+
+## Comandos Úteis
+
+| Comando | Quando usar | Resultado |
+|---------|-------------|-----------|
+| [Comando] | [Contexto] | [O que faz] |
+
+## Notas de Debug
+
+| Data | Problema | Solução | Ferramenta |
+|------|----------|---------|------------|
+| YYYY-MM-DD | [Problema] | [Solução] | [Ferramenta usada] |
+```
+
+---
+
+## Estrutura atualizada `.cursor/rules/`
+
+```
+.cursor/rules/
+├── project-context.md      # alwaysApply: true
+├── security.md             # alwaysApply: true
+├── learnings.md            # alwaysApply: true [NOVO]
+├── api-conventions.mdc     # globs: ["src/api/**"]
+├── database.mdc            # globs: ["src/db/**"]
+├── testing.mdc             # globs: ["**/*.test.*"]
+└── frontend.mdc            # globs: ["src/components/**"]
 ```
