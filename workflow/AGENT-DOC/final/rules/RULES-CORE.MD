@@ -1,7 +1,8 @@
-# IDEA-v3 — Regras Inquebráveis
+# AGENT-DOC — Regras Core (Inquebráveis)
 
 > **Quando usar:** Referência durante FASE 1-3 para garantir consistência na especificação.
-> **Carregue com:** `@IDEA-v3-RULES.MD`
+> **Carregue com:** `@rules/RULES-CORE.MD`
+> **Escopo:** Regras fundamentais que se aplicam a TODO projeto.
 
 ---
 
@@ -125,3 +126,11 @@ Toda feature DEVE incluir requisitos de segurança e casos de abuso.
 - Rate limiting / proteção brute-force
 - Logging seguro (sem PII/secrets)
 - Classificação de dados (PII/sensível) + retenção/minimização
+
+---
+
+## Arquivos relacionados
+
+- `@rules/RULES-AUTH.MD` — Regras de autenticação, usuários, transições de estado
+- `@rules/RULES-API.MD` — Regras de API (paginação, versionamento, concorrência, delete)
+- `@AGENT-DOC.MD` — Fluxo principal do workflow
