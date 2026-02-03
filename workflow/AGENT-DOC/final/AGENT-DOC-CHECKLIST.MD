@@ -1,11 +1,12 @@
 # AGENT-DOC — Checklist de Validação
 
-> **Quando usar:** Final da FASE 4, antes de entregar os artefatos.
+> **Quando usar:** Final da FASE 4 (artefatos) e durante implementação (validação da regra implementation.md).
 > **Carregue com:** `@AGENT-DOC-CHECKLIST.MD`
+> **Meta de qualidade:** 95%+ de precisão em decisões
 
 ---
 
-## Checklist executável (critérios verificáveis)
+## Checklist de Documentação (FASE 4) — Critérios verificáveis
 
 ### Estrutura
 - [ ] `.cursor/rules/` gerada com pelo menos `project-context.md` e `security.md`
@@ -139,6 +140,130 @@
 
 ---
 
+## Checklist de Implementação (regra implementation.md) — Por Task
+
+> **Detalhes completos:** regra `.cursor/rules/implementation.md` (template em `@AGENT-DOC-TEMPLATES.MD`).
+
+### Git (PRIMEIRO - obrigatório)
+- [ ] Branch dedicada criada (`feat/FEAT-xxx`, `fix/BUG-xxx`, etc.)
+- [ ] NÃO está na branch main/master/develop
+- [ ] Commits seguem padrão convencional (`feat:`, `fix:`, etc.)
+
+### Antes de começar
+- [ ] Li FEAT-xxx no PRD.md
+- [ ] Li API-xxx no TECH_SPECS.md
+- [ ] Identifiquei RULE-xxx aplicáveis
+- [ ] Identifiquei TEST-xxx que devo implementar
+- [ ] Usei PLAN mode para planejar
+- [ ] Fiz Clarification Questions se necessário
+
+### Durante implementação
+- [ ] Consultei Context7 para cada lib nova
+- [ ] Versões conferem com TECH_SPECS.md
+- [ ] Segui contrato de API exatamente
+- [ ] Implementei validações conforme documentado
+- [ ] Usei códigos de erro corretos
+
+### Definition of Done (DOD) — Antes de marcar DONE
+
+**DOD Básico (todas as tasks):**
+- [ ] Código compila sem erros
+- [ ] Lint passa sem erros críticos
+- [ ] Formatação aplicada
+- [ ] Tipos verificados
+
+**DOD Funcional (features):**
+- [ ] Teste unitário existe e passa (mínimo happy path)
+- [ ] Teste de integração existe (se API)
+- [ ] Versões das libs conferem com TECH_SPECS.md
+- [ ] Comando funciona localmente
+
+**DOD Infra (setup/deploy):**
+- [ ] Container builda sem erro
+- [ ] Container inicia sem erro
+- [ ] Health check responde
+- [ ] Logs não mostram erros
+
+**DOD Métricas:**
+- [ ] Clarification Questions feitas quando necessário
+- [ ] Precisão da task registrada em learnings.md
+- [ ] Se houve retrabalho, causa registrada
+
+### Comando de validação (executar antes de DONE)
+
+```bash
+# Verificar branch
+git branch --show-current  # Deve NÃO ser main/master/develop
+
+# Python
+make lint && make test && docker compose up -d && docker compose logs
+
+# Node
+npm run lint && npm test && docker compose up -d && docker compose logs
+```
+
+---
+
+## Métricas de Qualidade do Processo
+
+### Clarification Questions — Meta: 95%+ de precisão
+
+**Definição de precisão:**
+- Precisão = (Decisões corretas na primeira tentativa) / (Total de decisões)
+- Uma decisão é "correta" se NÃO precisou de retrabalho posterior
+
+**Quando Clarification Questions DEVE ser usado:**
+
+| Situação | Obrigatório? | Se não perguntar |
+|----------|--------------|------------------|
+| Versão de lib não especificada exatamente | ✅ Sim | Risco de incompatibilidade |
+| Múltiplas formas de implementar | ✅ Sim | Risco de refatoração |
+| Comportamento de erro não definido | ✅ Sim | Risco de comportamento inesperado |
+| Estrutura de diretórios não definida | ✅ Sim | Risco de reorganização |
+| Dependência externa não especificada | ✅ Sim | Risco de escolha errada |
+| Detalhes de UI/UX não especificados | ⚠️ Recomendado | Pode assumir padrão |
+| Ordem de implementação | ⚠️ Recomendado | Pode seguir grafo de deps |
+
+### Como registrar métricas
+
+**Ao final de cada FEAT, registrar em `learnings.md`:**
+
+```markdown
+## Métricas FEAT-xxx (YYYY-MM-DD)
+
+| Métrica | Valor |
+|---------|-------|
+| Clarification Questions feitas | X |
+| Decisões que precisaram retrabalho | Y |
+| Precisão | (X-Y)/X * 100% |
+| Causa dos retrabalhos | [lista] |
+```
+
+### Relatório de Qualidade (ao final do projeto)
+
+```markdown
+## Relatório de Qualidade — [Projeto]
+
+### Métricas Gerais
+| Métrica | Valor | Meta |
+|---------|-------|------|
+| Total de Clarification Questions | X | - |
+| Precisão média | Y% | 95%+ |
+| Tasks sem retrabalho | Z% | 90%+ |
+
+### Por FEAT
+| FEAT | Questions | Retrabalhos | Precisão |
+|------|-----------|-------------|----------|
+| FEAT-001 | 3 | 0 | 100% |
+| FEAT-002 | 2 | 1 | 50% |
+
+### Lições Aprendidas
+- [O que funcionou bem]
+- [O que melhorar]
+```
+
+---
+
 ## Artefatos por perfil
 
 | Artefato | PESSOAL | INTERNO | PRODUÇÃO |
@@ -176,3 +301,12 @@
 | API-xxx | Endpoint/Ação | TECH_SPECS.md |
 | TEST-xxx | Cenário de teste | TECH_SPECS.md |
 | ADR-xxx | Decisão arquitetural | ADR.md |
+
+---
+
+## Arquivos relacionados
+
+- `@AGENT-DOC.MD` — Fluxo principal (4 fases)
+- `@AGENT-DOC-TEMPLATES.MD` — Templates (inclui regra implementation.md — DOD, Git, Métricas)
+- `@AGENT-DOC-TOOLS.MD` — Ferramentas e integração Task-Master
+- `@AGENT-DOC-TESTING.MD` — Estratégia de testes

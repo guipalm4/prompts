@@ -1,6 +1,6 @@
 # AGENT-DOC — Ferramentas e Integrações
 
-> **Quando usar:** Referência durante FASE 1-3 para uso correto de MCPs, Skills, SubAgents e Commands.
+> **Quando usar:** Referência durante FASE 1-4 para uso correto de MCPs, Skills, SubAgents e Commands.
 > **Carregue com:** `@AGENT-DOC-TOOLS.MD`
 
 ---
@@ -144,6 +144,63 @@ projeto/
 │   └── tasks/
 │       └── tasks.json  # Gerado pelo parse_prd
 ```
+
+### 1.4 Workflow Task-Master + Documentação
+
+**Antes de `next_task`:**
+1. Identificar FEAT-xxx da task
+2. Ler seção correspondente em PRD.md
+3. Ler seção correspondente em TECH_SPECS.md
+4. Ler APIs relacionadas (API-xxx)
+5. Verificar regras de negócio (RULE-xxx)
+6. Verificar testes esperados (TEST-xxx)
+
+**Durante implementação:**
+1. Seguir contrato de API exatamente como documentado
+2. Implementar validações conforme JSON Schema
+3. Usar códigos de erro conforme Mapa de Erros
+4. Consultar Context7 para sintaxe de libs
+
+**Antes de `set_task_status: done`:**
+1. Executar DOD completo (ver regra `.cursor/rules/implementation.md`)
+2. Verificar que todos TEST-xxx da FEAT passam
+3. Validar versões de libs contra TECH_SPECS
+
+**Template de consulta:**
+```
+Para implementar FEAT-xxx:
+1. @PRD.md buscar FEAT-xxx → critérios de aceite
+2. @TECH_SPECS.md buscar API-xxx → contrato
+3. @TECH_SPECS.md buscar modelo de dados
+4. @SECURITY_IMPLEMENTATION.md verificar requisitos de segurança
+```
+
+### 1.5 Context7 Durante Implementação
+
+**Regra inquebrável:** Consultar Context7 ANTES de usar qualquer lib/API durante codificação.
+
+**Fluxo obrigatório:**
+
+```
+1. Identificar lib a usar (ex: FastAPI, Prisma, etc.)
+2. Verificar versão em TECH_SPECS.md
+3. resolve-library-id: "nome-da-lib"
+4. query-docs: { libraryId, query: "como fazer X" }
+5. Validar sintaxe está atualizada para versão do projeto
+6. Registrar consulta em learnings.md
+```
+
+**Quando usar Context7 durante implementação:**
+
+| Situação | Ação |
+|----------|------|
+| Primeira vez usando lib no projeto | Consultar setup/configuração |
+| Sintaxe não lembrada | Consultar exemplo de uso |
+| Dúvida sobre API | Consultar documentação específica |
+| Versão diferente da que conhece | Consultar breaking changes |
+| Erro estranho | Consultar troubleshooting |
+
+**Anti-pattern:** NÃO assumir sintaxe de memória. SEMPRE verificar via Context7.
 
 ---
 
@@ -320,19 +377,30 @@ Crie Commands quando:
 
 ### 5.2 Checklist de uso
 
-Antes de propor qualquer lib:
+**Antes de propor qualquer lib (FASE 1-3):**
 - [ ] Consultado Context7 para verificar existência e versão
 - [ ] Verificado compatibilidade com stack existente
 - [ ] Registrado em project-context.md
 
-Antes de implementar feature:
+**Antes de implementar feature** (regra `.cursor/rules/implementation.md`):
+- [ ] Branch dedicada criada (NÃO main/master/develop)
 - [ ] PRD parseado com Task-Master (se projeto >= INTERNO)
 - [ ] Issue criada no GitHub (se usando GitHub MCP)
-- [ ] SubAgents delegados para tarefas independentes
+- [ ] PLAN mode usado para planejar implementação
+- [ ] Documentação consultada (PRD, TECH_SPECS, SECURITY)
+- [ ] Context7 consultado para sintaxe de libs
 
-Após implementar feature:
+**Durante implementação:**
+- [ ] Context7 consultado para cada dúvida de sintaxe
+- [ ] Versões de libs conferem com TECH_SPECS.md
+- [ ] Clarification Questions feitas quando necessário
+- [ ] Decisões registradas em learnings.md
+
+**Após implementar feature:**
+- [ ] DOD completo executado (regra implementation.md)
 - [ ] Status atualizado no Task-Master
-- [ ] PR criado com template padrao
+- [ ] PR criado com template padrão
+- [ ] Métricas de precisão registradas em learnings.md
 - [ ] Learnings atualizados (se houver erro)
 
 ---
@@ -361,6 +429,7 @@ Após implementar feature:
 
 ## Arquivos relacionados
 
-- `@AGENT-DOC-RULES.MD` — Regra 2.5 (Anti-alucinação) integra com Context7
+- `@AGENT-DOC.MD` — Fluxo principal do workflow (4 fases)
+- `@AGENT-DOC-TEMPLATES.MD` — Template da regra implementation.md (DOD, Git, Métricas)
+- `@rules/RULES-CORE.MD` — Regra 2.5 (Anti-alucinação) integra com Context7
 - `@AGENT-DOC-MEMORY.MD` — Gestão de memória para evitar retrabalho
-- `@AGENT-DOC.MD` — Fluxo principal do workflow
