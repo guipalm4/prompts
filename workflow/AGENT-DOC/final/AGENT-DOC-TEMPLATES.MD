@@ -11,10 +11,12 @@
 .cursor/rules/
 ├── project-context.md      # alwaysApply: true
 ├── security.md             # alwaysApply: true
-├── api-conventions.mdc     # globs: ["src/api/**"]
-├── database.mdc            # globs: ["src/db/**"]
-├── testing.mdc             # globs: ["**/*.test.*"]
-└── frontend.mdc            # globs: ["src/components/**"]
+├── implementation.md       # alwaysApply: true — DOD, Git, Métricas
+├── learnings.md            # alwaysApply: true
+├── api-conventions.mdc     # globs: ["**/api/**", "**/routes/**"]
+├── database.mdc            # globs: ["**/db/**", "**/models/**", "**/prisma/**"]
+├── testing.mdc             # globs: ["**/test*/**", "**/*test*", "**/*spec*"]
+└── frontend.mdc            # globs: ["**/components/**", "**/pages/**"]
 ```
 
 ### Formato de arquivo de regra
@@ -22,7 +24,7 @@
 ```markdown
 ---
 description: Breve descrição da regra
-globs: ["src/api/**"]  # OU alwaysApply: true
+globs: ["**/api/**", "**/routes/**"]  # OU alwaysApply: true
 ---
 
 # Título da Regra
@@ -38,15 +40,313 @@ globs: ["src/api/**"]  # OU alwaysApply: true
 [Código quando relevante]
 ```
 
+### Globs Dinâmicos (flexíveis para diferentes estruturas)
+
+Os globs DEVEM ser flexíveis para suportar diferentes estruturas de projeto:
+
+| Arquivo | Globs recomendados | Estruturas suportadas |
+|---------|-------------------|----------------------|
+| `api-conventions.mdc` | `["**/api/**", "**/routes/**", "**/handlers/**", "**/features/**/routes*"]` | /src/api/, /src/routes/, /src/features/auth/routes.py |
+| `database.mdc` | `["**/db/**", "**/models/**", "**/prisma/**", "**/migrations/**", "**/entities/**"]` | /src/db/, /prisma/, /src/models/ |
+| `testing.mdc` | `["**/test*/**", "**/*test*", "**/*spec*", "**/conftest.py", "**/__tests__/**"]` | /tests/, *.test.ts, *.spec.ts, conftest.py |
+| `frontend.mdc` | `["**/components/**", "**/pages/**", "**/views/**", "**/screens/**"]` | /src/components/, /pages/, /src/views/ |
+
+**Anti-pattern:** NÃO usar globs que assumem estrutura específica inexistente (ex: `src/features/**` quando estrutura é `src/modules/**`).
+
 ### Conteúdo mínimo por arquivo
 
 | Arquivo | Conteúdo obrigatório |
 |---------|---------------------|
-| `project-context.md` | Contexto (2-3 linhas), Perfil, Stack/versões, Estrutura de diretórios |
+| `project-context.md` | Contexto, Perfil, **Stack com VERSÕES FIXADAS**, Estrutura, **Workflow de implementação** |
+| `implementation.md` | Git Workflow, Definition of Done (DOD), Clarification para implementação, Métricas |
 | `security.md` | Regras de segurança, Classificação de dados, Ações proibidas, Checkpoints |
 | `api-conventions.mdc` | Padrão de rotas, Formato request/response, Padrão de erros, Validação |
 | `database.mdc` | Naming, Migrations, Constraints, Soft delete |
 | `testing.mdc` | Framework, Cobertura mínima, Mocks, Estrutura |
+| `learnings.md` | Erros conhecidos, Padrões que funcionam, Libs consultadas, Métricas |
+
+---
+
+## Template: `project-context.md` (com enforcement de versões)
+
+```markdown
+---
+description: Contexto do projeto [Nome]
+alwaysApply: true
+---
+
+# Project Context
+
+## Resumo
+[2-3 linhas sobre o projeto]
+
+## Perfil
+- **Tipo:** PESSOAL | INTERNO | PRODUCAO
+- **Meta de qualidade:** 95%+ de precisão em decisões
+
+## Stack (VERSÕES FIXADAS - OBRIGATÓRIO SEGUIR)
+
+**ATENÇÃO:** As versões abaixo são OBRIGATÓRIAS. Antes de usar qualquer lib:
+1. Verificar se está listada aqui
+2. Se não estiver, consultar Context7 para versão compatível
+3. Registrar em learnings.md antes de usar
+
+| Componente | Tecnologia | Versão EXATA | Validação Context7 |
+|------------|------------|--------------|-------------------|
+| Runtime | Python | 3.11.x | ✅ Consultado |
+| Framework | FastAPI | 0.109.x | ✅ Consultado |
+| ORM | SQLModel | 0.0.14 | ✅ Consultado |
+| Banco | PostgreSQL | 16.x | ✅ Consultado |
+| [Adicionar conforme projeto] | | | |
+
+**Anti-pattern:** NÃO usar versões diferentes sem atualizar esta tabela e registrar em ADR.
+
+### Verificação de compatibilidade
+
+Antes de `pip install` ou `npm install`:
+1. Verificar se lib existe na tabela acima
+2. Se não existir, usar Context7 para verificar compatibilidade
+3. Adicionar à tabela após validação
+
+## Estrutura de diretórios
+\`\`\`
+projeto/
+├── src/
+├── tests/
+└── ...
+\`\`\`
+
+## Workflow de Implementação (OBRIGATÓRIO)
+
+### Git (NUNCA codar em main)
+1. Criar branch: `git checkout -b feat/FEAT-xxx-descricao`
+2. Commits convencionais: `feat:`, `fix:`, `chore:`
+3. Push e PR após DOD completo
+
+### Antes de implementar QUALQUER task:
+
+1. **PLAN mode obrigatório:**
+   - Usar Cursor Plan mode
+   - Listar arquivos que serão criados/modificados
+   - Identificar dependências
+   - Estimar complexidade
+
+2. **Clarification Questions se:**
+   - Contrato de API ambíguo
+   - Múltiplas formas de implementar
+   - Lib/versão não especificada
+   - Comportamento de erro não definido
+
+3. **Consultar Context7 ANTES de codar:**
+   - Para cada lib usada
+   - Validar sintaxe atual
+   - Registrar em learnings.md
+
+### Anti-patterns (PROIBIDO)
+- ❌ Pular direto para implementação sem Plan
+- ❌ Codar na branch main/master/develop
+- ❌ Assumir versão de lib sem consultar Context7
+- ❌ Marcar task como DONE sem executar DOD
+- ❌ Ignorar testes definidos no PRD
+
+## Referências
+- PRD.md
+- TECH_SPECS.md
+- SECURITY_IMPLEMENTATION.md
+- ADR.md
+```
+
+---
+
+## Template: `.cursor/rules/implementation.md`
+
+Regra **alwaysApply** que guia o agente durante a implementação (após documentação gerada). Inclui Git, DOD, Clarification e métricas.
+
+```markdown
+---
+description: Workflow de implementação — Git, DOD, Clarification, Métricas (95%+ precisão)
+alwaysApply: true
+---
+
+# Workflow de Implementação — [Nome do Projeto]
+
+**Meta de qualidade:** 95%+ de precisão em decisões (sem retrabalho).
+
+---
+
+## 1. Git Workflow (OBRIGATÓRIO)
+
+**NUNCA codar diretamente na branch principal (main/master/develop).**
+
+### Antes de implementar QUALQUER task
+
+1. Verificar branch: `git branch --show-current`
+2. Se estiver em main/master/develop: `git checkout -b feat/FEAT-xxx-descricao` (ou fix/, chore/, docs/)
+3. Validar branch antes de commitar: `git status`
+
+### Padrão de nomenclatura
+
+| Tipo | Padrão | Exemplo |
+|------|--------|---------|
+| Feature | feat/FEAT-xxx-descricao | feat/FEAT-001-autenticacao-pin |
+| Bug fix | fix/BUG-xxx-descricao | fix/BUG-042-parcelas-incorretas |
+| Refactor | refactor/descricao | refactor/extrair-servico-audio |
+| Infra/Setup | chore/descricao | chore/docker-compose-setup |
+| Docs | docs/descricao | docs/atualizar-readme |
+
+### Workflow completo
+
+\`\`\`bash
+git checkout main && git pull origin main
+git checkout -b feat/FEAT-xxx-descricao
+# Implementar (commits frequentes: feat:, fix:, chore:)
+make lint && make test && docker compose up -d
+git push -u origin feat/FEAT-xxx-descricao
+\`\`\`
+
+### Anti-patterns (PROIBIDO)
+
+- Codar na branch main/master/develop
+- Branch sem prefixo (feat/, fix/, etc.) ou sem referência à task (FEAT-xxx, BUG-xxx)
+- Commitar código que não passa no lint
+- Push sem executar testes
+
+---
+
+## 2. Definition of Done (DOD) — Obrigatório
+
+Uma task SÓ pode ser marcada como DONE quando TODOS os itens forem verificados.
+
+### DOD Git (PRIMEIRO)
+- [ ] Branch dedicada criada
+- [ ] NÃO está em main/master/develop
+- [ ] Commits seguem padrão convencional
+
+### DOD Básico (todas as tasks)
+- [ ] Código compila sem erros
+- [ ] Lint passa sem erros críticos
+- [ ] Formatação aplicada
+- [ ] Tipos verificados (mypy / tsc --noEmit)
+
+### DOD Funcional (features)
+- [ ] Teste unitário existe e passa (mínimo happy path)
+- [ ] Teste de integração existe (se API)
+- [ ] Versões das libs conferem com TECH_SPECS.md
+- [ ] Aplicação executa localmente (docker compose up -d ou equivalente)
+
+### DOD Infra (setup/deploy)
+- [ ] Container builda e inicia sem erro
+- [ ] Health check responde
+- [ ] Logs sem erros
+
+### DOD Métricas
+- [ ] Clarification Questions feitas quando necessário
+- [ ] Precisão registrada em learnings.md
+- [ ] Retrabalhos e causa registrados
+
+### Comando de validação (antes de DONE)
+
+\`\`\`bash
+git branch --show-current   # NÃO deve ser main
+make lint && make test && docker compose up -d && docker compose logs
+# ou: npm run lint && npm test && docker compose up -d && docker compose logs
+\`\`\`
+
+**NUNCA marcar DONE sem:** (1) branch dedicada, (2) validação completa, (3) métricas em learnings.md.
+
+---
+
+## 3. Workflow por FEAT
+
+Para cada FEAT-xxx do Task-Master:
+
+1. **GIT:** Criar branch dedicada
+2. **PLAN mode:** Ler PRD.md e TECH_SPECS.md da FEAT, listar dependências
+3. **Clarification:** Perguntar ANTES de implementar se houver ambiguidade (ver seção 4)
+4. **Context7:** Consultar sintaxe de libs, validar versão contra TECH_SPECS.md, registrar em learnings.md
+5. **Implementar** seguindo DOD
+6. **Validar** antes de DONE e registrar métricas
+
+---
+
+## 4. Clarification Questions para Implementação
+
+### Gatilhos obrigatórios (perguntar ANTES de codar)
+
+| Situação | Pergunta estruturada |
+|----------|---------------------|
+| Lib não especificada | "Qual lib usar para X?" → [Opção A / Opção B / Sugerir] |
+| Versão ambígua | "TECH_SPECS diz 'X 1.x+', usar qual?" → [versão exata / última estável] |
+| Múltiplas implementações | "Como implementar X?" → [Opção A / Opção B com prós/cons] |
+| Comportamento não definido | "O que fazer quando Y?" → [Erro / Fallback / Ignorar] |
+| Setup não especificado | "docker-compose deve incluir?" → [Apenas app / App+DB / App+DB+Redis] |
+| Estrutura de diretórios | "Onde criar X?" → [caminho A / caminho B] |
+
+### Triggers automáticos
+
+- Versão ambígua ("1.x+", "Python 3.11+") → "Qual versão exata devo usar?"
+- Config não especificada (ausência docker-compose, .env.example) → "Devo criar configuração? Quais serviços?"
+- Múltiplas libs possíveis → "Qual lib usar? [lista]"
+- Cenário não coberto em PRD/TECH_SPECS → "O que fazer quando X acontecer?"
+
+### Formato de Clarification
+
+\`\`\`markdown
+**Contexto:** Implementando FEAT-xxx | **Documento:** TECH_SPECS.md
+**Pergunta 1:** [clara] — [ ] Opção A  [ ] Opção B  [ ] Outra
+**Impacto se não perguntar:** [risco]
+\`\`\`
+
+---
+
+## 5. Checklist por Task
+
+### Antes de começar
+- [ ] Branch dedicada criada
+- [ ] Li FEAT-xxx no PRD.md e API-xxx no TECH_SPECS.md
+- [ ] Identifiquei RULE-xxx e TEST-xxx
+- [ ] PLAN mode usado
+- [ ] Clarification feita se necessário
+
+### Durante implementação
+- [ ] Context7 consultado para libs novas
+- [ ] Versões conferem com TECH_SPECS.md
+- [ ] Contrato de API seguido
+- [ ] Códigos de erro corretos
+
+### Antes de DONE
+- [ ] lint, format, type-check passam
+- [ ] Testes unitários e integração passam
+- [ ] Aplicação executa localmente
+- [ ] Métricas em learnings.md
+
+---
+
+## 6. Métricas (Meta: 95%+ precisão)
+
+Precisão = (Decisões corretas na 1ª tentativa) / (Total de decisões). Registrar em learnings.md:
+
+\`\`\`markdown
+## Métricas FEAT-xxx
+| Métrica | Valor |
+| Clarification Questions feitas | X |
+| Decisões que precisaram retrabalho | Y |
+| Precisão | (X-Y)/X * 100% |
+| Causa dos retrabalhos | [lista] |
+\`\`\`
+
+---
+
+## 7. Consulta de documentação
+
+Para implementar FEAT-xxx: @PRD.md (FEAT-xxx), @TECH_SPECS.md (API-xxx, modelo de dados), @SECURITY_IMPLEMENTATION.md, @ADR.md.
+
+---
+
+## 8. Anti-patterns (PROIBIDO)
+
+- Codar em main; pular Plan; assumir versão sem Context7; marcar DONE sem DOD; ignorar testes do PRD; não registrar métricas; assumir quando há ambiguidade (perguntar).
+```
 
 ---
 
@@ -503,11 +803,40 @@ npm test -- --watch
 
 ```markdown
 ---
-description: Lições aprendidas e erros a evitar
+description: Lições aprendidas, métricas e erros a evitar
 alwaysApply: true
 ---
 
 # Learnings — [Nome do Projeto]
+
+## Métricas de Qualidade (Meta: 95%+ precisão)
+
+### Métricas Gerais
+| Métrica | Valor | Meta |
+|---------|-------|------|
+| Total de Clarification Questions | 0 | - |
+| Precisão média | -% | 95%+ |
+| Tasks sem retrabalho | -% | 90%+ |
+
+### Por FEAT
+| FEAT | Questions | Retrabalhos | Precisão | Data |
+|------|-----------|-------------|----------|------|
+| FEAT-xxx | 0 | 0 | -% | YYYY-MM-DD |
+
+### Template para registrar métricas por FEAT
+
+\`\`\`markdown
+## Métricas FEAT-xxx (YYYY-MM-DD)
+
+| Métrica | Valor |
+|---------|-------|
+| Clarification Questions feitas | X |
+| Decisões que precisaram retrabalho | Y |
+| Precisão | (X-Y)/X * 100% |
+| Causa dos retrabalhos | [lista] |
+\`\`\`
+
+---
 
 ## Erros Conhecidos
 
@@ -519,6 +848,8 @@ alwaysApply: true
 | Data | Erro | Solução | Contexto | FEAT/API |
 |------|------|---------|----------|----------|
 | 2024-01-15 | Prisma N+1 query | Usar `include` ao invés de queries separadas | API-001 | FEAT-001 |
+
+---
 
 ## Padrões que Funcionam
 
@@ -537,10 +868,6 @@ alwaysApply: true
 
 ---
 
-### Padrão: [Outro Padrão]
-
-[Repetir estrutura acima]
-
 ## Libs Consultadas (Cache)
 
 | Lib | Versão | Doc URL | Última Consulta | Notas |
@@ -550,13 +877,11 @@ alwaysApply: true
 **Exemplo:**
 | Lib | Versão | Doc URL | Última Consulta | Notas |
 |-----|--------|---------|-----------------|-------|
-| Fastify | 4.x | https://fastify.dev | 2024-01-15 | API estável, compatível Node 20+ |
+| FastAPI | 0.109.x | https://fastapi.tiangolo.com | 2024-01-15 | Async, Pydantic v2 |
 
-## Consultas de API Externa
+**Regra:** Consultar Context7 ANTES de usar lib. Registrar aqui APÓS consulta.
 
-| API | Endpoint | Método | Última Consulta | Resposta Esperada |
-|-----|----------|--------|-----------------|-------------------|
-| [Nome] | [Path] | GET/POST/etc | YYYY-MM-DD | [Status + formato] |
+---
 
 ## Decisões de Design
 
@@ -564,17 +889,43 @@ alwaysApply: true
 |------|---------|---------------|-----|
 | YYYY-MM-DD | [Decisão] | [Por que] | ADR-xxx |
 
+---
+
+## Consultas de API Externa
+
+| API | Endpoint | Método | Última Consulta | Resposta Esperada |
+|-----|----------|--------|-----------------|-------------------|
+| [Nome] | [Path] | GET/POST/etc | YYYY-MM-DD | [Status + formato] |
+
+---
+
 ## Comandos Úteis
 
 | Comando | Quando usar | Resultado |
 |---------|-------------|-----------|
-| [Comando] | [Contexto] | [O que faz] |
+| `git branch --show-current` | Verificar branch atual | Nome da branch |
+| `make lint && make test` | Validar antes de DONE | Lint + testes passam |
+| `docker compose up -d` | Testar localmente | App rodando |
+
+---
 
 ## Notas de Debug
 
 | Data | Problema | Solução | Ferramenta |
 |------|----------|---------|------------|
 | YYYY-MM-DD | [Problema] | [Solução] | [Ferramenta usada] |
+
+---
+
+## Relatório de Qualidade (preencher ao final do projeto)
+
+### Lições Aprendidas
+- [O que funcionou bem]
+- [O que melhorar]
+
+### Recomendações para próximo projeto
+- [Recomendação 1]
+- [Recomendação 2]
 ```
 
 ---
@@ -585,9 +936,10 @@ alwaysApply: true
 .cursor/rules/
 ├── project-context.md      # alwaysApply: true
 ├── security.md             # alwaysApply: true
-├── learnings.md            # alwaysApply: true [NOVO]
-├── api-conventions.mdc     # globs: ["src/api/**"]
-├── database.mdc            # globs: ["src/db/**"]
-├── testing.mdc             # globs: ["**/*.test.*"]
-└── frontend.mdc            # globs: ["src/components/**"]
+├── implementation.md       # alwaysApply: true — DOD, Git, Métricas
+├── learnings.md            # alwaysApply: true
+├── api-conventions.mdc     # globs: ["**/api/**", "**/routes/**"]
+├── database.mdc            # globs: ["**/db/**", "**/models/**", "**/prisma/**"]
+├── testing.mdc             # globs: ["**/test*/**", "**/*test*", "**/*spec*"]
+└── frontend.mdc            # globs: ["**/components/**", "**/pages/**"]
 ```

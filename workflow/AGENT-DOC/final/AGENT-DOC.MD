@@ -1,7 +1,8 @@
-# PROMPT MESTRE (Experts) — Documentação Agêntica "First Time Right" — v3
+# PROMPT MESTRE (Experts) — Documentação Agêntica "First Time Right" — v4
 
 > **Objetivo:** gerar documentação técnica **determinística**, **testável** e **implementável sem dúvidas** por agentes no Cursor IDE.
 > **Anti-vibe-coding:** nada de prosa vaga, nada de suposições, nada de "depois a gente vê".
+> **Meta de qualidade:** 95%+ de precisão em decisões (sem retrabalho)
 
 ---
 
@@ -17,7 +18,7 @@ Este é o **prompt principal**. Os detalhes estão em arquivos separados:
 | `@rules/RULES-AUTH.MD` | Regras de auth (usuários, estado, recuperação) | FASE 1-3 (se auth) |
 | `@rules/RULES-API.MD` | Regras de API (paginação, versão, delete) | FASE 2-3 (ao definir APIs) |
 | **Ferramentas e Testes:** | | |
-| `@AGENT-DOC-TOOLS.MD` | MCPs, Skills, SubAgents, Commands | FASE 1-3 |
+| `@AGENT-DOC-TOOLS.MD` | MCPs, Skills, SubAgents, Commands | FASE 1-4 |
 | `@AGENT-DOC-TESTING.MD` | Estratégia de testes (TDD, regressão) | FASE 3 |
 | `@AGENT-DOC-MEMORY.MD` | Gestão de memória e contexto | FASE 1, 4 |
 | `@AGENT-DOC-TEMPLATES.MD` | Templates dos artefatos | FASE 4 |
@@ -383,15 +384,27 @@ Deseja que eu complete esses itens ou há informações faltando?
 
 ### Quando usar Clarification Questions
 
+**Durante documentação (FASE 1-4):**
+
 | Situação | Usar? | Formato |
 |----------|-------|---------|
 | Entrada mínima incompleta | ✅ Sim | Múltipla escolha |
 | Perfil do projeto indefinido | ✅ Sim | 3 opções fixas |
 | Trade-off arquitetural | ✅ Sim | Opções + contexto |
-| Detalhes de implementação | ❌ Não | Decidir baseado em contexto |
 | Validação de entendimento | ✅ Sim | Confirmação Sim/Não |
 | Gate não cumprido | ✅ Sim | Checklist de pendências |
 | Informação disponível no codebase | ❌ Não | Ler arquivos primeiro |
+
+**Durante implementação** (regra `.cursor/rules/implementation.md` gerada na FASE 4 — Meta: 95%+ precisão):
+
+| Situação | Usar? | Se não perguntar |
+|----------|-------|------------------|
+| Versão de lib não especificada exatamente | ✅ Sim | Risco de incompatibilidade |
+| Múltiplas formas de implementar | ✅ Sim | Risco de refatoração |
+| Comportamento de erro não definido | ✅ Sim | Risco de comportamento inesperado |
+| Estrutura de diretórios não definida | ✅ Sim | Risco de reorganização |
+| Dependência externa não especificada | ✅ Sim | Risco de escolha errada |
+| Detalhes de UI/UX não especificados | ⚠️ Recomendado | Pode assumir padrão |
 
 **Boas práticas:**
 - ✅ Máximo 3-4 perguntas por bloco
@@ -418,7 +431,7 @@ Deseja que eu complete esses itens ou há informações faltando?
 - `@AGENT-DOC-TOOLS.MD` — Ferramentas (MCPs, Skills, SubAgents)
 - `@AGENT-DOC-TESTING.MD` — Estratégia de testes (TDD, regressão)
 - `@AGENT-DOC-MEMORY.MD` — Gestão de memória e contexto
-- `@AGENT-DOC-TEMPLATES.MD` — Templates dos artefatos
+- `@AGENT-DOC-TEMPLATES.MD` — Templates dos artefatos (inclui regra implementation.md)
 - `@AGENT-DOC-CHECKLIST.MD` — Checklist de validação
 
 ### Exemplos (divididos por artefato)
